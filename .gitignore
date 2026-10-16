@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Local config (paths + API endpoints)
+settings.json
+
+# Combo inputs & check results (never commit credentials)
+input/
+results/
+Result/
+HIT/
+BAD/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
