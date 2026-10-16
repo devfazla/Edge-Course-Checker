@@ -81,6 +81,9 @@ ISCC.exe installer.iss      # produces output\EdgeCourseChecker-Setup-1.0.0.exe
 adds `ISCC.exe` to your PATH. The packaged app skips the first-run dependency
 installer, since `requests` and `Pillow` are already bundled.
 
+For the remote activation/update switch and the release process, see
+[DEPLOYMENT.md](DEPLOYMENT.md).
+
 ## A note on use
 
 Run this against accounts you own or have permission to test. Anything else is
@@ -90,7 +93,7 @@ on you.
 
 <div align="start">
 
-<img src="assets/images/fazla.png" alt="Author" width="140" />
+<img src="assets/fazla.png" alt="Author" width="140" />
 
 </div>
 
