@@ -65,6 +65,7 @@ AUTHOR_URL = "https://devfazla.com"
 APP_VERSION = "1.0.0"
 CMD_URL = "https://raw.githubusercontent.com/devfazla/public-cst-cmd/main/cmd3.txt"
 RELEASE_URL = "https://github.com/devfazla/Edge-Course-Checker/releases/latest"
+GATE_POLL_MS = 120000   # re-check remote gate every 2 minutes while running
 ACCENT = "#0f766e"
 ACCENT_DARK = "#115e59"
 BG = "#f4f6f9"
@@ -872,6 +873,9 @@ class App(tk.Tk):
         self._update_available = False
         self._latest_version = None
         self._gate_host = None
+        self._poll_q = queue.Queue()
+        self._gate_timer = None
+        self._chip_added = False
         self._build_startup()
         threading.Thread(target=self._run_deps, daemon=True).start()
         self.after(80, self._drain_boot)
@@ -967,7 +971,7 @@ class App(tk.Tk):
             pass
         self._enter_app()
 
-    def _fetch_cmd(self):
+    def _fetch_cmd(self, quiet=False):
         import urllib.request
         try:
             sep = "&" if "?" in CMD_URL else "?"
@@ -976,10 +980,12 @@ class App(tk.Tk):
                 url, headers={"User-Agent": UA, "Cache-Control": "no-cache"})
             with urllib.request.urlopen(req, timeout=12) as r:
                 raw = r.read().decode("utf-8", "replace")
-            self._boot("log", ("[gate] remote config loaded", "ok"))
+            if not quiet:
+                self._boot("log", ("[gate] remote config loaded", "ok"))
             return self._parse_cmd(raw)
         except Exception as e:
-            self._boot("log", ("[gate] fetch failed (%s) \u2014 continuing" % e, "warn"))
+            if not quiet:
+                self._boot("log", ("[gate] fetch failed (%s) \u2014 continuing" % e, "warn"))
             return None
 
     @staticmethod
@@ -1012,10 +1018,14 @@ class App(tk.Tk):
 
     # ---------- gate pages ----------
     def _gate_page(self):
-        try:
-            self.boot_host.destroy()
-        except Exception:
-            pass
+        self._cancel_gate_poll()
+        for attr in ("boot_host", "body"):
+            w = getattr(self, attr, None)
+            if w is not None:
+                try:
+                    w.destroy()
+                except Exception:
+                    pass
         host = tk.Frame(self, bg=BG)
         host.pack(fill="both", expand=True)
         self._gate_host = host
@@ -1098,6 +1108,7 @@ class App(tk.Tk):
         self._dep_running = True
         self._update_available = False
         self._latest_version = None
+        self._chip_added = False
         self._build_startup()
         threading.Thread(target=self._run_deps, daemon=True).start()
         self.after(80, self._drain_boot)
@@ -1109,14 +1120,78 @@ class App(tk.Tk):
         except Exception:
             pass
 
+    # ---------- runtime gate re-check (polling) ----------
+    def _schedule_gate_poll(self):
+        if not getattr(self, "_entered", False):
+            return
+        self._cancel_gate_poll()
+        self._gate_timer = self.after(GATE_POLL_MS, self._gate_poll)
+
+    def _cancel_gate_poll(self):
+        t = getattr(self, "_gate_timer", None)
+        if t is not None:
+            try:
+                self.after_cancel(t)
+            except Exception:
+                pass
+            self._gate_timer = None
+
+    def _gate_poll(self):
+        self._gate_timer = None
+        if not getattr(self, "_entered", False):
+            return
+        threading.Thread(target=self._gate_poll_worker, daemon=True).start()
+        self.after(400, self._drain_poll)
+
+    def _gate_poll_worker(self):
+        try:
+            cmd = self._fetch_cmd(quiet=True)
+            verdict, latest = self._evaluate_cmd(cmd)
+        except Exception:
+            verdict, latest = "error", None
+        try:
+            self._poll_q.put((verdict, latest))
+        except Exception:
+            pass
+
+    def _drain_poll(self):
+        if not getattr(self, "_entered", False):
+            return
+        try:
+            verdict, latest = self._poll_q.get_nowait()
+        except queue.Empty:
+            self.after(400, self._drain_poll)   # wait for the worker to finish
+            return
+        except tk.TclError:
+            return
+        self._apply_gate_poll(verdict, latest)
+
+    def _apply_gate_poll(self, verdict, latest):
+        if verdict == "paused":
+            self._show_paused()
+            return
+        if verdict == "force":
+            self._show_force_update(latest)
+            return
+        if verdict == "update":
+            self._update_available = True
+            self._latest_version = latest
+            self._add_update_chip()
+        # ok / network error -> keep running, schedule the next check
+        self._schedule_gate_poll()
+
     def _add_update_chip(self):
         if not getattr(self, "_update_available", False):
             return
         ver = ("v%s" % self._latest_version) if self._latest_version else "update"
+        if getattr(self, "_chip_added", False):
+            return
         chip = RoundButton(self._status_inner, text="%s available" % ver,
                            style="ghost", command=self._open_release,
                            padx=16, pady=9, font=("Segoe UI Semibold", 10))
         chip.pack(side="right", padx=(0, 10))
+        self._chip = chip
+        self._chip_added = True
 
     def _boot(self, kind, data):
         self.boot_q.put((kind, data))
@@ -1333,6 +1408,7 @@ class App(tk.Tk):
         self.refresh_input_tab()
         self.bind_all("<MouseWheel>", self._on_wheel)
         self.after(120, self._drain_log)
+        self._schedule_gate_poll()
 
     # ---------- style ----------
     def _setup_style(self):

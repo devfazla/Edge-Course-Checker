@@ -111,6 +111,23 @@ Version compare treats the dotted number as a tuple, so `1.10.0 > 1.9.0` and
 **If the fetch fails** (offline, file moved, GitHub down), the app **opens
 normally**. A control outage never locks out a legitimate user.
 
+### It also re-checks while running
+
+The gate is not launch-only. Once the dashboard is up, the app re-fetches
+`cmd3.txt` in the background every **2 minutes** (`GATE_POLL_MS` in `main.py`).
+So if you flip a value while someone has the app open, it takes effect within a
+couple of minutes without a restart:
+
+- flips to **paused** or **force** -> the dashboard is torn down immediately and
+  the gate page is shown.
+- flips to **update** (or `ecc-v` rises) -> the version chip appears/updates in
+  the top bar.
+- a poll that fails (network blip) is ignored; the app keeps running and tries
+  again on the next interval.
+
+The re-check runs on a background thread with the same cache-buster, so it adds
+no UI lag and never serves stale content.
+
 Both the pause and force pages open the same destination when the user chooses to
 update / view releases:
 
