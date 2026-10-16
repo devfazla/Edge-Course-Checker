@@ -1059,9 +1059,11 @@ class App(tk.Tk):
         self._gate_logo_block(inner)
         tk.Label(inner, text="App Paused", bg=CARD_BG, fg=BAD_C,
                  font=("Segoe UI Semibold", 22)).pack()
-        msg = tk.Label(inner, text="This app is paused by Author %s" % AUTHOR,
-                       bg=CARD_BG, fg=FG, font=("Segoe UI", 12), justify="center")
-        msg.pack(pady=(8, 6))
+        msg = tk.Label(inner, text="This app is paused by Author", bg=CARD_BG,
+                       fg=FG, font=("Segoe UI", 12), justify="center")
+        msg.pack(pady=(8, 2))
+        self._link_label(inner, AUTHOR, CARD_BG,
+                         font=("Segoe UI", 12, "bold")).pack(pady=(0, 6))
         sub = tk.Label(inner, text="Please check back later for an update.",
                        bg=CARD_BG, fg=MUTED, font=("Segoe UI", 10), justify="center")
         sub.pack(pady=(0, 20))
@@ -1119,6 +1121,27 @@ class App(tk.Tk):
             webbrowser.open(RELEASE_URL)
         except Exception:
             pass
+
+    def _link_label(self, parent, text, bg, font=("Segoe UI", 9), url=None,
+                    fg=ACCENT):
+        """A clickable @devFazla-style link label (hand2 cursor, underline hover)."""
+        url = url or AUTHOR_URL
+        lbl = tk.Label(parent, text=text, bg=bg, fg=fg, font=font, cursor="hand2")
+        family, size = font[0], font[1]
+        words = [w for w in (font[2].split() if len(font) > 2 else [])]
+
+        def _style(underline):
+            s = list(words)
+            if underline and "underline" not in s:
+                s.append("underline")
+            try:
+                lbl.configure(font=(family, size, " ".join(s)) if s else (family, size))
+            except Exception:
+                pass
+        lbl.bind("<Button-1>", lambda e: webbrowser.open(url))
+        lbl.bind("<Enter>", lambda e: _style(True))
+        lbl.bind("<Leave>", lambda e: _style(False))
+        return lbl
 
     # ---------- runtime gate re-check (polling) ----------
     def _schedule_gate_poll(self):
