@@ -4,7 +4,7 @@
 # Compatible with PyInstaller 6.x.
 
 a = Analysis(
-    ['abc.py'],
+    ['main.py'],
     pathex=[],
     binaries=[],
     datas=[('assets', 'assets')],          # bundle logo.png / icon.ico next to the code

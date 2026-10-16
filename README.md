@@ -3,7 +3,7 @@
 A desktop app, written in Python and Tkinter, that checks account combos
 against the Edge Course API and sorts what comes back into working (HIT) and
 dead (BAD) folders. It runs the checks across several threads at once. The
-whole thing lives in one file, `abc.py`.
+whole thing lives in one file, `main.py`.
 
 Made by [@devFazla](https://devfazla.com).
 
@@ -39,7 +39,7 @@ pip install requests Pillow
 ```bash
 git clone https://github.com/devfazla/Edge-Course-Checker.git
 cd Edge-Course-Checker
-python abc.py
+python main.py
 ```
 
 ## Input format
@@ -58,7 +58,7 @@ launch if they aren't there.
 
 ```
 .
-├── abc.py          # the app: GUI and checker
+├── main.py         # the app: GUI and checker
 ├── make_logo.py    # regenerates the logo and icon
 ├── assets/         # logo.png, logo_256.png, icon.ico
 ├── input/          # your .txt combo files
@@ -86,6 +86,37 @@ installer, since `requests` and `Pillow` are already bundled.
 Run this against accounts you own or have permission to test. Anything else is
 on you.
 
-## Author
+## Portfolio (Author)
 
-@devFazla, [devfazla.com](https://devfazla.com)
+<div align="start">
+
+<img src="assets/images/fazla.png" alt="Author" width="140" />
+
+</div>
+
+| | |
+|---|---|
+| **Name** | *Fazla Rabbi* |
+| **Role** | Software Developer |
+| **Portfolio / Website** | *https://devfazla.com* |
+| **Contact** | [contact@devfazla.com](mailto:contact@devfazla.com) |
+
+<div align="start">
+
+<b>Socials:</b><br>
+
+<a href="https://devfazla.com" title="Website"><img src="https://cdn.simpleicons.org/googlechrome" height="20" alt="Website" /></a>&nbsp;&nbsp;
+<a href="https://github.com/devfazla" title="GitHub"><img src="https://cdn.simpleicons.org/github" height="20" alt="GitHub" /></a>&nbsp;&nbsp;
+<a href="https://www.linkedin.com/in/devfazla/" title="LinkedIn"><img src="https://cdn.simpleicons.org/linkedin" height="20" alt="LinkedIn" /></a>&nbsp;&nbsp;
+<a href="https://www.facebook.com/devfazla" title="Facebook"><img src="https://cdn.simpleicons.org/facebook" height="20" alt="Facebook" /></a>&nbsp;&nbsp;
+<a href="https://x.com/devfazla" title="X (Twitter)"><img src="https://cdn.simpleicons.org/x" height="18" alt="X" /></a>&nbsp;&nbsp;
+
+</div>
+
+### Key Skills in This Project
+
+- **Language & GUI**: `Python 3.13`, `Tkinter` / `ttk`
+- **Concurrency**: `threading`, `concurrent.futures` (`ThreadPoolExecutor`)
+- **HTTP & Networking**: `requests`
+- **Image handling**: `Pillow`
+- **Packaging & distribution**: `PyInstaller`, `Inno Setup`

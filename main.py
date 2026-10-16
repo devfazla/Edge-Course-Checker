@@ -59,6 +59,12 @@ DEPENDENCIES = [
 APP_TITLE = "Edge Course Checker"
 AUTHOR = "@devFazla"
 AUTHOR_URL = "https://devfazla.com"
+
+# --------- remote activation / update gate ---------
+# Fetched at launch (raw text). Keys: ecc, ecc-up, ecc-up-f, ecc-v
+APP_VERSION = "1.0.0"
+CMD_URL = "https://raw.githubusercontent.com/devfazla/public-cst-cmd/main/cmd3.txt"
+RELEASE_URL = "https://github.com/devfazla/Edge-Course-Checker/releases/latest"
 ACCENT = "#0f766e"
 ACCENT_DARK = "#115e59"
 BG = "#f4f6f9"
@@ -141,6 +147,16 @@ def _res_dir():
 
 
 # --------- helpers ---------
+
+def _truthy(v):
+    return str(v).strip().lower() in ("true", "1", "yes", "on")
+
+
+def _ver_tuple(s):
+    import re
+    nums = re.findall(r"\d+", str(s or ""))
+    return tuple(int(x) for x in nums[:4]) or (0,)
+
 
 def get_input_files():
     if not os.path.isdir(INPUT_DIR):
@@ -853,16 +869,13 @@ class App(tk.Tk):
         self._dep_running = True
         self._spin_i = 0
         self._spin_frames = ["|", "/", "-", "\\"]
-        if getattr(sys, "frozen", False):
-            # Packaged exe: dependencies are bundled, so skip the installer
-            # and go straight to the dashboard.
-            self._dep_running = False
-            self._enter_app()
-        else:
-            self._build_startup()
-            threading.Thread(target=self._run_deps, daemon=True).start()
-            self.after(80, self._drain_boot)
-            self.after(90, self._spin_tick)
+        self._update_available = False
+        self._latest_version = None
+        self._gate_host = None
+        self._build_startup()
+        threading.Thread(target=self._run_deps, daemon=True).start()
+        self.after(80, self._drain_boot)
+        self.after(90, self._spin_tick)
 
     # ---------- startup / dependency checker ----------
     def _build_startup(self):
@@ -928,11 +941,14 @@ class App(tk.Tk):
     def _spin_tick(self):
         if getattr(self, "_entered", False):
             return
-        if getattr(self, "_dep_running", False):
-            self.boot_spin.configure(text=self._spin_frames[self._spin_i % len(self._spin_frames)])
-            self._spin_i += 1
-        else:
-            self.boot_spin.configure(text="\u2713")
+        try:
+            if getattr(self, "_dep_running", False):
+                self.boot_spin.configure(text=self._spin_frames[self._spin_i % len(self._spin_frames)])
+                self._spin_i += 1
+            else:
+                self.boot_spin.configure(text="\u2713")
+        except tk.TclError:
+            return
         self.after(90, self._spin_tick)
 
     def _skip_boot(self):
@@ -950,6 +966,157 @@ class App(tk.Tk):
         except Exception:
             pass
         self._enter_app()
+
+    def _fetch_cmd(self):
+        import urllib.request
+        try:
+            sep = "&" if "?" in CMD_URL else "?"
+            url = "%s%st=%d" % (CMD_URL, sep, int(time.time()))
+            req = urllib.request.Request(
+                url, headers={"User-Agent": UA, "Cache-Control": "no-cache"})
+            with urllib.request.urlopen(req, timeout=12) as r:
+                raw = r.read().decode("utf-8", "replace")
+            self._boot("log", ("[gate] remote config loaded", "ok"))
+            return self._parse_cmd(raw)
+        except Exception as e:
+            self._boot("log", ("[gate] fetch failed (%s) \u2014 continuing" % e, "warn"))
+            return None
+
+    @staticmethod
+    def _parse_cmd(raw):
+        cfg = {}
+        for line in raw.splitlines():
+            line = line.strip().rstrip(";").strip()
+            if not line or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            cfg[k.strip().lower()] = v.strip()
+        return cfg
+
+    def _evaluate_cmd(self, cmd):
+        """Return (verdict, latest_version); verdict in ok/paused/force/update."""
+        if not cmd:
+            return "ok", None                       # offline -> fail open
+        active = _truthy(cmd.get("ecc", "true"))
+        up = _truthy(cmd.get("ecc-up", "false"))
+        upf = _truthy(cmd.get("ecc-up-f", "false"))
+        latest = cmd.get("ecc-v")
+        newer = bool(latest) and _ver_tuple(latest) > _ver_tuple(APP_VERSION)
+        if not active:
+            return "paused", latest
+        if upf:
+            return "force", latest
+        if up or newer:
+            return "update", latest
+        return "ok", latest
+
+    # ---------- gate pages ----------
+    def _gate_page(self):
+        try:
+            self.boot_host.destroy()
+        except Exception:
+            pass
+        host = tk.Frame(self, bg=BG)
+        host.pack(fill="both", expand=True)
+        self._gate_host = host
+        wrap = tk.Frame(host, bg=BG)
+        wrap.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.8)
+        card = RoundCard(wrap, radius=24, bg=BG)
+        card.pack(fill="x")
+        inner = card.inner
+        inner.configure(bg=CARD_BG, padx=36, pady=34)
+        return host, inner
+
+    def _auto_wrap(self, host, labels, frac=0.62, lo=260, hi=520):
+        def on_conf(e):
+            w = int(max(lo, min(hi, e.width * frac)))
+            for lb in labels:
+                try:
+                    lb.configure(wraplength=w)
+                except Exception:
+                    pass
+        host.bind("<Configure>", on_conf)
+        host.event_generate("<Configure>")
+
+    def _gate_logo_block(self, inner):
+        logo = self._load_logo(56)
+        if logo is not None:
+            self._gate_logo = logo
+            tk.Label(inner, image=logo, bg=CARD_BG).pack(pady=(0, 14))
+
+    def _show_paused(self):
+        host, inner = self._gate_page()
+        self._gate_logo_block(inner)
+        tk.Label(inner, text="App Paused", bg=CARD_BG, fg=BAD_C,
+                 font=("Segoe UI Semibold", 22)).pack()
+        msg = tk.Label(inner, text="This app is paused by Author %s" % AUTHOR,
+                       bg=CARD_BG, fg=FG, font=("Segoe UI", 12), justify="center")
+        msg.pack(pady=(8, 6))
+        sub = tk.Label(inner, text="Please check back later for an update.",
+                       bg=CARD_BG, fg=MUTED, font=("Segoe UI", 10), justify="center")
+        sub.pack(pady=(0, 20))
+        self._auto_wrap(host, [msg, sub])
+        row = tk.Frame(inner, bg=CARD_BG)
+        row.pack()
+        RoundButton(row, text="Retry", style="primary", command=self._retry_gate,
+                    padx=26).pack(side="left", padx=6)
+        RoundButton(row, text="Close", style="ghost", command=self.destroy,
+                    padx=26).pack(side="left", padx=6)
+
+    def _show_force_update(self, latest):
+        host, inner = self._gate_page()
+        self._gate_logo_block(inner)
+        tk.Label(inner, text="Update Required", bg=CARD_BG, fg=ERR_C,
+                 font=("Segoe UI Semibold", 22)).pack()
+        ver = ("v%s" % latest) if latest else "a new version"
+        msg = tk.Label(inner,
+                       text="A required update (%s) is available. You must update "
+                            "before using the app." % ver,
+                       bg=CARD_BG, fg=FG, font=("Segoe UI", 12), justify="center")
+        msg.pack(pady=(8, 6))
+        sub = tk.Label(inner,
+                       text="Download the latest setup from the releases page and run "
+                            "it \u2014 your settings and data are kept.",
+                       bg=CARD_BG, fg=MUTED, font=("Segoe UI", 10), justify="center")
+        sub.pack(pady=(0, 20))
+        self._auto_wrap(host, [msg, sub])
+        row = tk.Frame(inner, bg=CARD_BG)
+        row.pack()
+        RoundButton(row, text="Update now", style="primary",
+                    command=self._open_release, padx=26).pack(side="left", padx=6)
+        RoundButton(row, text="Close", style="ghost",
+                    command=self.destroy, padx=26).pack(side="left", padx=6)
+
+    def _retry_gate(self):
+        if self._gate_host is not None:
+            try:
+                self._gate_host.destroy()
+            except Exception:
+                pass
+        self._gate_host = None
+        self._entered = False
+        self._dep_running = True
+        self._update_available = False
+        self._latest_version = None
+        self._build_startup()
+        threading.Thread(target=self._run_deps, daemon=True).start()
+        self.after(80, self._drain_boot)
+        self.after(90, self._spin_tick)
+
+    def _open_release(self):
+        try:
+            webbrowser.open(RELEASE_URL)
+        except Exception:
+            pass
+
+    def _add_update_chip(self):
+        if not getattr(self, "_update_available", False):
+            return
+        ver = ("v%s" % self._latest_version) if self._latest_version else "update"
+        chip = RoundButton(self._status_inner, text="%s available" % ver,
+                           style="ghost", command=self._open_release,
+                           padx=16, pady=9, font=("Segoe UI Semibold", 10))
+        chip.pack(side="right", padx=(0, 10))
 
     def _boot(self, kind, data):
         self.boot_q.put((kind, data))
@@ -970,11 +1137,26 @@ class App(tk.Tk):
                     self.boot_log.insert("end", text + "\n", tag)
                     self.boot_log.see("end")
                     self.boot_log.configure(state="disabled")
+                elif kind == "gate":
+                    verdict, latest = data
+                    if verdict == "paused":
+                        self._entered = True
+                        self._show_paused()
+                        return
+                    if verdict == "force":
+                        self._entered = True
+                        self._show_force_update(latest)
+                        return
+                    if verdict == "update":
+                        self._update_available = True
+                        self._latest_version = latest
                 elif kind == "done":
                     self._enter_app()
                     return
         except queue.Empty:
             pass
+        except tk.TclError:
+            return
         if not self._entered:
             self.after(80, self._drain_boot)
 
@@ -1019,6 +1201,38 @@ class App(tk.Tk):
 
     def _run_deps(self):
         import subprocess, importlib, json
+
+        # ---- remote activation / update gate (stdlib only, runs before deps) ----
+        self._boot("status", "Connecting\u2026")
+        self._boot("log", ("[gate] checking activation \u00b7 v" + APP_VERSION, "info"))
+        cmd = self._fetch_cmd()
+        verdict, latest = self._evaluate_cmd(cmd)
+        if verdict == "paused":
+            self._dep_running = False
+            self._boot("log", ("[gate] app is paused by author", "warn"))
+            self._boot("gate", ("paused", None))
+            return
+        if verdict == "force":
+            self._dep_running = False
+            self._boot("log", ("[gate] forced update required \u2192 v%s" % (latest or "?"), "warn"))
+            self._boot("gate", ("force", latest))
+            return
+        if verdict == "update":
+            self._boot("log", ("[gate] update available \u2192 v%s" % (latest or "?"), "act"))
+            self._boot("gate", ("update", latest))
+        else:
+            self._boot("log", ("[gate] ok \u2014 app is active", "ok"))
+
+        # ---- packaged build: dependencies are bundled, skip the installer ----
+        if getattr(sys, "frozen", False):
+            self._boot("progress", 1.0)
+            self._dep_running = False
+            self._boot("status", "Ready")
+            self._boot("log", ("[done] packaged build \u2014 dependencies bundled", "ok"))
+            time.sleep(0.5)
+            self._boot("done", None)
+            return
+
         try:
             import importlib.metadata as md
         except ImportError:
@@ -1114,6 +1328,7 @@ class App(tk.Tk):
         except Exception:
             pass
         self._build_body()
+        self._add_update_chip()
         self.select_tab(0)
         self.refresh_input_tab()
         self.bind_all("<MouseWheel>", self._on_wheel)
@@ -1285,6 +1500,7 @@ class App(tk.Tk):
             parent = self.content
         inner = tk.Frame(parent, bg=BG)
         inner.pack(fill="x", side="top", padx=28, pady=16)
+        self._status_inner = inner
         tk.Frame(parent, bg=BORDER, height=1).pack(fill="x", side="top")
         self.status_badge = Badge(inner, text="Ready", fg=MUTED, fill=NAV_TINT,
                                   outline=BORDER, dot=MUTED, font=("Segoe UI Semibold", 9))

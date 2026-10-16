@@ -28,6 +28,12 @@ SolidCompression=yes
 WizardStyle=modern
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=lowest
+; Smooth in-place upgrade: close a running old app, don't relaunch automatically.
+; User data (settings.json, input\, results\) is left untouched so the new
+; version merges over the old install.
+CloseApplications=yes
+CloseApplicationsFilter=*.exe
+RestartApplications=no
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
