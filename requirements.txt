@@ -1,0 +1,4 @@
+# Runtime + build dependencies
+requests
+Pillow
+pyinstaller

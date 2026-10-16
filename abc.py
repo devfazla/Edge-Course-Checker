@@ -132,6 +132,14 @@ def ensure_dirs():
 
 ensure_dirs()
 
+
+def _res_dir():
+    """Absolute path to the assets folder; resolves correctly inside a
+    PyInstaller bundle (one-file) as well as when run from source."""
+    base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base, "assets")
+
+
 # --------- helpers ---------
 
 def get_input_files():
@@ -822,8 +830,7 @@ class App(tk.Tk):
         self.configure(bg=BG)
         ensure_dirs()   # re-create the current targeted input/result folders on launch
 
-        _icon = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                             "assets", "icon.ico")
+        _icon = os.path.join(_res_dir(), "icon.ico")
         if os.path.exists(_icon):
             try:
                 self.iconbitmap(_icon)
@@ -846,10 +853,16 @@ class App(tk.Tk):
         self._dep_running = True
         self._spin_i = 0
         self._spin_frames = ["|", "/", "-", "\\"]
-        self._build_startup()
-        threading.Thread(target=self._run_deps, daemon=True).start()
-        self.after(80, self._drain_boot)
-        self.after(90, self._spin_tick)
+        if getattr(sys, "frozen", False):
+            # Packaged exe: dependencies are bundled, so skip the installer
+            # and go straight to the dashboard.
+            self._dep_running = False
+            self._enter_app()
+        else:
+            self._build_startup()
+            threading.Thread(target=self._run_deps, daemon=True).start()
+            self.after(80, self._drain_boot)
+            self.after(90, self._spin_tick)
 
     # ---------- startup / dependency checker ----------
     def _build_startup(self):
@@ -1170,7 +1183,7 @@ class App(tk.Tk):
 
     # ---------- top ----------
     def _load_logo(self, px):
-        base = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
+        base = _res_dir()
         try:
             from PIL import Image, ImageTk
             im = Image.open(os.path.join(base, "logo.png")).convert("RGBA")

@@ -20,3 +20,9 @@ BAD/
 Thumbs.db
 .idea/
 .vscode/
+
+# Build output (PyInstaller / Inno Setup)
+build/
+dist/
+output/
+*.manifest

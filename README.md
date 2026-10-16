@@ -67,6 +67,20 @@ launch if they aren't there.
     └── BAD/
 ```
 
+## Build a Windows exe
+
+Make the executable with PyInstaller, then wrap it in a setup with Inno Setup.
+
+```powershell
+pwsh -File build.ps1        # produces dist\EdgeCourseChecker.exe
+ISCC.exe installer.iss      # produces output\EdgeCourseChecker-Setup-1.0.0.exe
+```
+
+`build.ps1` installs the deps from `requirements.txt` and runs the
+`EdgeCourseChecker.spec`. Inno Setup is a separate download; once installed it
+adds `ISCC.exe` to your PATH. The packaged app skips the first-run dependency
+installer, since `requests` and `Pillow` are already bundled.
+
 ## A note on use
 
 Run this against accounts you own or have permission to test. Anything else is
